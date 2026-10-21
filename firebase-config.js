@@ -1,11 +1,11 @@
 // Edite este arquivo com a configuração pública do app Web do Firebase.
 // Não coloque aqui senhas de IPTV, chaves privadas ou credenciais de service account.
 export const firebaseConfig = {
-  apiKey: "YOUR_FIREBASE_WEB_API_KEY",
-  authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
-  projectId: "YOUR_PROJECT_ID",
-  storageBucket: "YOUR_PROJECT_ID.firebasestorage.app",
-  messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
-  appId: "YOUR_FIREBASE_WEB_APP_ID",
+  apiKey: "AIzaSyCAv3oJhwUhg55hZ49jxo6MhRtdU06XYJ8",
+  authDomain: "iptv-config-2b7e9.firebaseapp.com",
+  projectId: "iptv-config-2b7e9",
+  storageBucket: "iptv-config-2b7e9.firebasestorage.app",
+  messagingSenderId: "437103170869",
+  appId: "1:437103170869:web:16a2fafdaac153d9c2287c",
   appCheckSiteKey: "YOUR_RECAPTCHA_ENTERPRISE_SITE_KEY"
 };
