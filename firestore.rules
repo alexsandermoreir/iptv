@@ -1,0 +1,61 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isOwner(userId) {
+      return request.auth != null && request.auth.uid == userId;
+    }
+
+    function validSource(data) {
+      return data.keys().hasOnly([
+          'name', 'kind', 'serverUrl', 'username', 'password', 'm3uUrl', 'createdAt', 'updatedAt'
+        ])
+        && data.name is string
+        && data.name.size() > 0
+        && data.name.size() <= 48
+        && data.kind in ['xtream', 'm3u']
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp
+        && (
+          (data.kind == 'xtream'
+            && data.keys().hasAll(['serverUrl', 'username', 'password'])
+            && !data.keys().hasAny(['m3uUrl'])
+            && data.serverUrl is string
+            && data.serverUrl.size() <= 500
+            && data.username is string
+            && data.username.size() > 0
+            && data.username.size() <= 256
+            && data.password is string
+            && data.password.size() > 0
+            && data.password.size() <= 512)
+          ||
+          (data.kind == 'm3u'
+            && data.keys().hasAll(['m3uUrl'])
+            && !data.keys().hasAny(['serverUrl', 'username', 'password'])
+            && data.m3uUrl is string
+            && data.m3uUrl.size() <= 4096)
+        );
+    }
+
+    match /users/{userId}/sources/{sourceId} {
+      allow read, delete: if isOwner(userId);
+      allow create: if isOwner(userId)
+        && validSource(request.resource.data)
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time;
+      allow update: if isOwner(userId)
+        && validSource(request.resource.data)
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.updatedAt == request.time;
+    }
+
+    // Pairing code documents are managed only by the Admin SDK in Cloud Functions.
+    // No browser or Android client can read, create, list, update, or delete them.
+    match /pairingCodes/{pairingCodeHash} {
+      allow read, write: if false;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -1,0 +1,15 @@
+// Copie este arquivo para firebase-config.js e preencha com os dados do app Web
+// em Configurações do projeto > Seus apps no console do Firebase.
+// Estes identificadores web são públicos; a segurança vem do Auth, das regras
+// do Firestore e das Firebase Functions, nunca de esconder este arquivo.
+export const firebaseConfig = {
+  apiKey: "YOUR_FIREBASE_WEB_API_KEY",
+  authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+  projectId: "YOUR_PROJECT_ID",
+  storageBucket: "YOUR_PROJECT_ID.firebasestorage.app",
+  messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
+  appId: "YOUR_FIREBASE_WEB_APP_ID",
+  // Cadastre um provedor App Check para Web e informe a chave pública do site.
+  // As Functions exigem App Check; enquanto estiver vazio, o pareamento fica desativado.
+  appCheckSiteKey: "YOUR_RECAPTCHA_ENTERPRISE_SITE_KEY"
+};
