@@ -73,11 +73,20 @@ export async function sign(urls) {
 }
 export const proxied = async (u) => (await sign([u]))[0];
 async function proxyFetch(url, init) {
-  const r = await fetch(await proxied(url), init);
-  if (!r.ok) throw new Error(r.status === 410 ? "A sessão de mídia expirou. Recarregue a página." : `O servidor da lista respondeu com erro (HTTP ${r.status}).`);
-  return r;
-}
-export const fetchJson = async (url) => (await proxyFetch(url)).json();
+  const action = (String(url).match(/[?&]action=([a-z_]+)/) || [])[1] || "acesso"; // só o nome da chamada (nunca usuário/senha)
+  let last;
+  for (let tentativa = 1; tentativa <= 3; tentativa++) {
+    try {
+      const r = await fetch(await proxied(url), init);
+      if (!r.ok) throw Object.assign(new Error(r.status === 410 ? "A sessão de mídia expirou. Recarregue a página." : `O servidor da lista respondeu com erro (HTTP ${r.status}).`), { http: true });
+      return r;
+    } catch (e) {
+      last = e; if (e.http) throw new Error(`${action}: ${e.message}`);
+      await new Promise((res) => setTimeout(res, 700 * tentativa)); // falha de rede: tenta de novo
+    }
+  }
+  throw new Error(`${action}: ${last?.message || "falha de rede"} (3 tentativas)`);
+}export const fetchJson = async (url) => { const r = await proxyFetch(url); try { return await r.json(); } catch (e) { throw new Error(`${(String(url).match(/[?&]action=([a-z_]+)/) || [])[1] || "acesso"}: resposta incompleta ou inválida (${e.message})`); } };
 export const fetchText = async (url) => (await proxyFetch(url)).text();
 
 // ---------------------------------------------------------------- sincronização

@@ -339,7 +339,7 @@ function saveNow() {
 /** Ao vivo: tenta HLS (.m3u8) pela variante escolhida; se falhar, MPEG-TS; depois passa para a próxima variante (failover). */
 async function playLive(sc, idx = 0, mode = "hls", keep = false) {
   teardown(); P.recovered = false; P.cur = { live: true, key: sc.key, sc, idx };
-  if (!keep) P.why = []; // motivos das tentativas, mostrados se tudo falhar
+  if (!keep) { P.why = []; P.probed = false; } // motivos das tentativas, mostrados se tudo falhar
   const note = (m) => { P.why.push(`v${idx + 1}/${mode}: ${m}`); console.warn("[iptv]", P.why.at(-1)); };
   const v = sc.variants[idx], src = G.byId[v.sid];
   openPlayer(sc.name, `${v.group}`);
@@ -348,9 +348,11 @@ async function playLive(sc, idx = 0, mode = "hls", keep = false) {
   sel.onchange = () => playLive(sc, Number(sel.value), "hls");
   const fav = $("#p-fav"); fav.hidden = false; fav.textContent = isFav(sc.key) ? "★" : "☆"; fav.onclick = () => { toggleFav(sc.key); fav.textContent = isFav(sc.key) ? "★" : "☆"; };
   addHist(sc.key);
+  let media0 = "";
   const fail = (why) => {
     if (P.cur?.sc !== sc || P.cur.idx !== idx) return;
     if (why) note(why);
+    if (!P.probed) { P.probed = true; probeOnce(media0, note); }
     if (mode === "hls" && src?.kind === "xtream" && !v.url) return playLive(sc, idx, "ts", true);
     if (idx + 1 < sc.variants.length) { pmsg("Esta versão falhou. Tentando a próxima…"); return playLive(sc, idx + 1, "hls", true); }
     pmsg(`Não foi possível reproduzir este canal no navegador. Tente na TV ou outra versão.\n\nDetalhes técnicos (me envie isto):\n${P.why.slice(-6).join("\n")}`);
@@ -358,14 +360,7 @@ async function playLive(sc, idx = 0, mode = "hls", keep = false) {
   try {
     pmsg("Conectando…");
     const url = C.liveUrl(src, v, mode === "ts" ? "ts" : "m3u8");
-    const media = await K.proxied(url);
-    // sondagem: se o provedor recusar, mostra o status e o começo da resposta (sem a senha)
-    { const ctl = new AbortController();
-      try {
-        const pr = await fetch(media, { signal: ctl.signal, cache: "no-store" });
-        if (!pr.ok) { const body = (await pr.text()).replace(/\s+/g, " ").slice(0, 160); note(`sondagem: provedor respondeu HTTP ${pr.status} via ${pr.headers.get("x-up-via") || "?"} ${body ? `"${body}"` : "(sem texto)"}`); return fail(`HTTP ${pr.status}`); }
-        else note(`sondagem: HTTP ${pr.status} ${pr.headers.get("content-type") || ""} via ${pr.headers.get("x-up-via") || "?"}/${pr.headers.get("x-up-host") || "?"}`);
-      } catch (e) { note(`sondagem: falha de rede (${e.message})`); } finally { ctl.abort(); } }
+    const media = await K.proxied(url); media0 = media;
     const isHls = mode === "hls" && (!v.url || /\.m3u8(\?|$)/i.test(v.url));
     if (isHls && window.Hls?.isSupported()) {
       const hls = new Hls({ lowLatencyMode: false, maxBufferLength: 20 }); P.hls = hls;
@@ -386,6 +381,16 @@ async function playLive(sc, idx = 0, mode = "hls", keep = false) {
     video.onplaying = () => pmsg("");
     loadNowNext(sc, v, src);
   } catch (e) { note(e.message || "erro ao preparar"); pmsg(e.message || "Não foi possível abrir o canal."); }
+}
+/** Uma consulta só, depois de a reprodução falhar, para mostrar o que o servidor respondeu. */
+async function probeOnce(media, note) {
+  if (!media) return;
+  const ctl = new AbortController();
+  try {
+    const pr = await fetch(media, { signal: ctl.signal, cache: "no-store" });
+    if (!pr.ok) note(`servidor respondeu HTTP ${pr.status} via ${pr.headers.get("x-up-via") || "?"} "${(await pr.text()).replace(/\s+/g, " ").slice(0, 120)}"`);
+    else note(`servidor respondeu HTTP ${pr.status} ${pr.headers.get("content-type") || ""}`);
+  } catch (e) { note(`falha de rede (${e.message})`); } finally { ctl.abort(); }
 }
 async function loadNowNext(sc, v, src) {
   if (src?.kind !== "xtream" || !v.streamId) return;
