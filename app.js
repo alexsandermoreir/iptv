@@ -521,7 +521,7 @@ function setTv() {
 }
 function setAccount() {
   const u = K.user;
-  return h("div", { class: "panel" }, h("h3", {}, u?.displayName || "Conta Google"), h("p", {}, u?.email || ""),
+  return h("div", { class: "panel" }, h("h3", {}, u?.displayName || "Conta Google"), h("p", {}, u?.email || ""), h("h3", { style: "margin-top:18px" }, "Instalar no aparelho"), installPanel(),
     h("div", { class: "bar" }, h("button", { onclick: async () => { await K.flush(); await K.pull(); bump(); render(); toast("Sincronizado."); } }, "Sincronizar agora"),
       h("button", { onclick: async () => { await K.flush(); await K.logout(); location.reload(); } }, "Sair")));
 }
@@ -571,3 +571,16 @@ K.initCloud(async (u, state) => {
   setInterval(() => { if (document.visibilityState === "visible" && $("#player").hidden) K.pull().catch(() => {}); }, 90000);
   document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") K.pull().catch(() => {}); });
 });
+
+// ---------------------------------------------------------------- app instalável (PWA)
+if ("serviceWorker" in navigator) addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));
+let installEvt = null;
+addEventListener("beforeinstallprompt", (e) => { e.preventDefault(); installEvt = e; if (G.view === "settings" && SET.tab === "account") render(); });
+const isStandalone = () => matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
+const isIos = () => /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+function installPanel() {
+  if (isStandalone()) return h("p", { class: "small dim" }, "✓ Você já está usando o app instalado.");
+  if (installEvt) return h("div", { class: "bar" }, h("button", { class: "primary", onclick: async () => { installEvt.prompt(); await installEvt.userChoice.catch(() => {}); installEvt = null; render(); } }, "Instalar como aplicativo"));
+  if (isIos()) return h("p", { class: "small" }, "iPhone/iPad: toque no botão Compartilhar (quadrado com seta) do Safari → “Adicionar à Tela de Início”.");
+  return h("p", { class: "small dim" }, "Para instalar: no menu do navegador (⋮), escolha “Instalar app” ou “Adicionar à tela inicial”.");
+}
