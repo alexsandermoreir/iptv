@@ -23,7 +23,7 @@ let pendingToken = null;
 
 const ERR = {
   404: "Código inválido ou expirado. Gere um novo na TV.",
-  409: "Este código já foi usado. Gere um novo na TV.",
+  409: "Este QR e o número mostrado na TV pertencem à mesma tentativa, que já foi iniciada. Feche a conexão na TV e abra ‘Minhas listas do site’ novamente para gerar um QR novo.",
   410: "O código expirou. Gere um novo na TV.",
   429: "Muitas tentativas. Aguarde alguns minutos.",
 };
@@ -97,6 +97,25 @@ async function claim(tokenOrCode, isCode) {
   } catch (e) { show("Não foi possível conectar", ERR[e.status] || "Tente novamente em instantes.", btn("Fechar", () => dlg.close(), true)); }
 }
 
+// A reivindicação do código é de uso único. Primeiro fazemos login e só então
+// consumimos o QR/código; assim uma janela de login interrompida não invalida o QR.
+async function beginClaim(tokenOrCode, isCode) {
+  const user = await currentUser();
+  if (user) { await claim(tokenOrCode, isCode); return; }
+
+  const enter = async () => {
+    try {
+      await signInWithPopup(getAuth(app), new GoogleAuthProvider());
+      await claim(tokenOrCode, isCode);
+    } catch {
+      show("Login não concluído", "O QR continua válido. Tente entrar com Google novamente.",
+        btn("Tentar de novo", enter, true), btn("Cancelar", () => dlg.close()));
+    }
+  };
+  show("Entre com Google", "Depois do login, vamos conectar esta TV e você poderá escolher sua lista.",
+    btn("Entrar com Google", enter, true), btn("Fechar", () => dlg.close()));
+}
+
 async function afterClaim() {
   const user = await currentUser();
   if (!user) {
@@ -143,7 +162,7 @@ function askCode() {
   const input = el("input", "", "width:100%;padding:12px;border-radius:10px;background:#1f262e;color:#f2f4f5;border:1px solid #2a323b;font-size:20px;letter-spacing:3px;text-transform:uppercase");
   input.placeholder = "ABCD 1234"; input.maxLength = 12; input.autocomplete = "off"; input.autocapitalize = "characters";
   show("Conectar uma TV", "Digite o código mostrado na TV (Conectar pelo celular).", input,
-    btn("Continuar", () => { const c = input.value.replace(/[^A-Za-z0-9]/g, ""); if (c.length >= 8) claim(c, true); }, true), btn("Fechar", () => dlg.close()));
+    btn("Continuar", () => { const c = input.value.replace(/[^A-Za-z0-9]/g, ""); if (c.length >= 8) beginClaim(c, true); }, true), btn("Fechar", () => dlg.close()));
 }
 
 if (!API) {
@@ -152,5 +171,5 @@ if (!API) {
   const open = btn("Conectar uma TV com código", askCode);
   open.style.cssText += ";position:fixed;right:16px;bottom:16px;z-index:50";
   document.body.append(open);
-  if (pendingToken) { const t = pendingToken; pendingToken = null; claim(t, false); }
+  if (pendingToken) { const t = pendingToken; pendingToken = null; beginClaim(t, false); }
 }
