@@ -1,7 +1,7 @@
 // Minhas listas IPTV. Usa o Firebase já configurado em firebase-config.js e as regras atuais do Firestore:
 // cada pessoa lê/grava somente em users/{uid}/sources. O pareamento cifra a fonte no navegador para a TV.
 import { initializeApp, getApps } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js";
-import { getAuth, GoogleAuthProvider, getRedirectResult, onAuthStateChanged, signInWithPopup, signInWithRedirect, signOut } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js";
+import { getAuth, GoogleAuthProvider, onAuthStateChanged, signInWithPopup, signOut } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js";
 import { getFirestore, collection, doc, getDocs, orderBy, query, serverTimestamp, setDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js";
 import { firebaseConfig } from "./firebase-config.js";
 
@@ -27,7 +27,6 @@ if (!configured) {
 } else {
   const app = getApps()[0] || initializeApp(firebaseConfig);
   auth = getAuth(app); db = getFirestore(app);
-  getRedirectResult(auth).catch(() => toast("Não foi possível concluir o login. Tente de novo."));
   onAuthStateChanged(auth, (u) => {
     user = u;
     el.gate.hidden = Boolean(u); el.work.hidden = !u; el.chip.hidden = !u; el.signout.hidden = !u;
@@ -41,15 +40,24 @@ if (!configured) {
 
 async function login() {
   if (!auth) return;
+  el.signin.disabled = true;
   try {
-    const p = new GoogleAuthProvider();
-    if (window.matchMedia("(pointer: coarse)").matches) await signInWithRedirect(auth, p); // celular: evita bloqueio de pop-up
-    else await signInWithPopup(auth, p);
+    // GitHub Pages não hospeda o auxiliar /__/auth do Firebase. Em celulares,
+    // signInWithRedirect pode falhar quando o navegador bloqueia armazenamento de terceiros;
+    // o popup iniciado pelo toque é o fluxo compatível recomendado para hospedagem externa.
+    await signInWithPopup(auth, new GoogleAuthProvider());
   } catch (e) {
     const c = e?.code || "";
-    toast(c.includes("popup-blocked") ? "O navegador bloqueou a janela de login. Permita pop-ups." :
-      c.includes("popup-closed") ? "Login cancelado." :
-      c.includes("unauthorized-domain") ? "Este endereço não está autorizado no Firebase Auth." : "Não foi possível entrar com Google.");
+    const messages = {
+      "auth/popup-blocked": "O navegador bloqueou a janela do Google. Permita pop-ups para este site e tente novamente.",
+      "auth/popup-closed-by-user": "A janela do Google foi fechada antes de terminar. Toque em Entrar com Google e escolha sua conta.",
+      "auth/unauthorized-domain": "O endereço do site ainda não está autorizado no Firebase. O domínio alexsandermoreir.github.io precisa ser adicionado.",
+      "auth/operation-not-allowed": "O login com Google ainda não está ativado no Firebase Authentication.",
+      "auth/operation-not-supported-in-this-environment": "Este navegador não permite o login. Abra o site no Chrome ou Safari, fora de outro aplicativo.",
+    };
+    toast(messages[c] || `Não foi possível entrar com Google (${c || "erro"}). Tente de novo.`);
+  } finally {
+    el.signin.disabled = false;
   }
 }
 
