@@ -2,7 +2,7 @@
 // (users/{uid}/sources e users/{uid}/sync/{settings|profiles|p_<perfil>}), então tudo acompanha a conta.
 import { initializeApp, getApps } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js";
 import { getAuth, GoogleAuthProvider, getRedirectResult, onAuthStateChanged, signInWithPopup, signInWithRedirect, signOut } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js";
-import { getFirestore, collection, doc, getDocs, orderBy, query, serverTimestamp, setDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js";
+import { getFirestore, initializeFirestore, collection, doc, getDocs, orderBy, query, serverTimestamp, setDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js";
 import { firebaseConfig } from "./firebase-config.js";
 
 export const configured = ["apiKey", "authDomain", "projectId", "appId"].every((k) => typeof firebaseConfig?.[k] === "string" && firebaseConfig[k] && !firebaseConfig[k].startsWith("YOUR_"));
@@ -16,7 +16,9 @@ const emit = (s) => listeners.forEach((fn) => fn(s));
 export function initCloud(onUser) {
   if (!configured) { onUser(null, "not_configured"); return; }
   const app = getApps()[0] || initializeApp(firebaseConfig);
-  auth = getAuth(app); db = getFirestore(app);
+  auth = getAuth(app);
+  // Safari/iPhone às vezes bloqueia o canal contínuo do Firestore; a detecção automática troca para "long polling"
+  try { db = initializeFirestore(app, { experimentalAutoDetectLongPolling: true }); } catch { db = getFirestore(app); }
   getRedirectResult(auth).catch(() => emit({ error: "Não foi possível concluir o login." }));
   onAuthStateChanged(auth, (u) => { user = u; onUser(u); });
 }

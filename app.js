@@ -94,7 +94,7 @@ async function loadCatalogs(force = false) {
       G.status = `Carregando “${s.name}”…`; render();
       const data = s.kind === "xtream" ? await C.loadXtream(s, K.fetchJson, (m) => { G.status = `${s.name}: ${m}`; render(); }) : C.loadM3u(s, await K.fetchText(s.m3uUrl));
       G.raw[s.id] = data; await idb.set(`cat:${s.id}`, { t: Date.now(), sig: sig(s), data });
-    } catch (e) { errors.push(`${s.name}: ${e.message}`); }
+    } catch (e) { errors.push(`${s.name}: ${e?.name === "RangeError" || /memory|quota/i.test(String(e?.message)) ? "memória insuficiente neste aparelho (" + e.message + ")" : (e?.message || e)}`); console.warn("[iptv] catálogo", e); }
   }
   const all = G.sources.map((s) => G.raw[s.id]).filter(Boolean);
   G.smart = C.groupChannels(all.flatMap((d) => d.channels));
@@ -127,8 +127,13 @@ function render() {
   document.querySelectorAll("#nav button[data-v]").forEach((b) => b.classList.toggle("on", b.dataset.v === G.view));
   const view = $("#view"), keepScroll = view.scrollTop;
   const status = G.loading ? h("div", { class: "panel" }, h("div", { class: "spinner", style: "display:inline-block;vertical-align:middle;margin-right:12px;width:22px;height:22px;border-width:3px" }), G.status || "Carregando catálogo…") : null;
+  const problems = [G.srcError && `Listas da conta: ${G.srcError}`, ...(G.errors || [])].filter(Boolean);
+  const diag = problems.length ? h("div", { class: "panel", style: "border-color:#d9534f" }, h("h3", {}, "Não foi possível carregar tudo"),
+    h("p", { class: "small", style: "white-space:pre-line;color:var(--text)" }, problems.join("\n")),
+    h("p", { class: "small dim" }, `Listas encontradas: ${G.sources.length} • canais: ${G.smart.length} • filmes: ${G.movies.length} • séries: ${G.series.length}`),
+    h("button", { class: "primary", onclick: async () => { G.errors = []; try { await loadSources(); G.srcError = ""; } catch (e) { G.srcError = `${e?.code || "erro"}: ${e?.message || e}`; } await loadCatalogs(true); } }, "Tentar de novo")) : null;
   const body = VIEWS[G.view]();
-  view.replaceChildren(...[status, body].filter(Boolean)); view.scrollTop = keepScroll;
+  view.replaceChildren(...[status, diag, body].filter(Boolean)); view.scrollTop = keepScroll;
   const w = prof(); $("#who-name").textContent = w.name; $("#who-av").textContent = w.name.charAt(0).toUpperCase();
 }
 function emptyNote(msg, action) { return h("div", { class: "panel" }, h("p", {}, msg), action || null); }
@@ -565,7 +570,7 @@ K.initCloud(async (u, state) => {
   await chooseProfile();
   $("#app").hidden = false;
   K.setOnChange(() => { applyAccent(); if (!G.profile || !K.S.profiles.some((p) => p.id === G.profile.id)) G.profile = K.S.profiles[0]; else G.profile = K.S.profiles.find((p) => p.id === G.profile.id); bump(); render(); });
-  try { await loadSources(); } catch { toast("Não foi possível carregar suas listas."); }
+  try { await loadSources(); G.srcError = ""; } catch (e) { G.srcError = `${e?.code || "erro"}: ${e?.message || e}`; toast("Não foi possível carregar suas listas."); }
   render();
   await loadCatalogs();
   setInterval(() => { if (document.visibilityState === "visible" && $("#player").hidden) K.pull().catch(() => {}); }, 90000);
