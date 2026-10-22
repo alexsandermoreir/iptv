@@ -101,3 +101,9 @@ dialog::backdrop { background:rgba(0,0,0,.7); }
 
 .row .lg .art { aspect-ratio:auto; width:100%; height:100%; background:transparent; font-size:14px; }
 .row .lg { overflow:hidden; }
+
+.art { position:relative; overflow:hidden; }
+.art img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; opacity:0; transition:opacity .2s; }
+.art img.ok { opacity:1; }
+.card .art.logo-art img { object-fit:contain; padding:14px; }
+.card .art img { background:var(--surface-hi); }

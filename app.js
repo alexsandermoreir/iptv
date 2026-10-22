@@ -72,14 +72,16 @@ function loadImg(img) {
 function art(url, label, cls = "") {
   const box = h("div", { class: `art ${cls}` }, (label || "?").trim().charAt(0).toUpperCase());
   if (url) {
-    const img = h("img", { alt: "", loading: "lazy", decoding: "async", referrerpolicy: "no-referrer" });
-    img.dataset.src = url; img.style.display = "none"; box.append(img);
-    img.addEventListener("load", () => { img.style.display = ""; box.replaceChildren(img); });
+    // a imagem fica visível (transparente) sobre a inicial: imagens ocultas com display:none nunca entram na tela e não carregam
+    const img = h("img", { alt: "", decoding: "async", referrerpolicy: "no-referrer" });
+    img.dataset.src = url;
+    img.addEventListener("load", () => img.classList.add("ok"));
+    img.addEventListener("error", () => img.remove());
+    box.append(img);
     if (io) io.observe(img); else loadImg(img);
   }
   return box;
 }
-
 // ---------------------------------------------------------------- catálogo
 const sig = (s) => `${s.kind}|${s.serverUrl || s.m3uUrl}|${s.username || ""}`;
 async function loadCatalogs(force = false) {
@@ -356,8 +358,8 @@ async function playLive(sc, idx = 0, mode = "hls", keep = false) {
     { const ctl = new AbortController();
       try {
         const pr = await fetch(media, { signal: ctl.signal, cache: "no-store" });
-        if (!pr.ok) { const body = (await pr.text()).replace(/\s+/g, " ").slice(0, 160); note(`sondagem: provedor respondeu HTTP ${pr.status} ${body ? `"${body}"` : "(sem texto)"}`); return fail(`HTTP ${pr.status}`); }
-        else note(`sondagem: HTTP ${pr.status} ${pr.headers.get("content-type") || ""}`);
+        if (!pr.ok) { const body = (await pr.text()).replace(/\s+/g, " ").slice(0, 160); note(`sondagem: provedor respondeu HTTP ${pr.status} via ${pr.headers.get("x-up-via") || "?"} ${body ? `"${body}"` : "(sem texto)"}`); return fail(`HTTP ${pr.status}`); }
+        else note(`sondagem: HTTP ${pr.status} ${pr.headers.get("content-type") || ""} via ${pr.headers.get("x-up-via") || "?"}/${pr.headers.get("x-up-host") || "?"}`);
       } catch (e) { note(`sondagem: falha de rede (${e.message})`); } finally { ctl.abort(); } }
     const isHls = mode === "hls" && (!v.url || /\.m3u8(\?|$)/i.test(v.url));
     if (isHls && window.Hls?.isSupported()) {
