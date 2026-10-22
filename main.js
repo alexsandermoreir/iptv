@@ -1,13 +1,13 @@
 // Minhas listas IPTV. Usa o Firebase já configurado em firebase-config.js e as regras atuais do Firestore:
 // cada pessoa lê/grava somente em users/{uid}/sources. O pareamento cifra a fonte no navegador para a TV.
 import { initializeApp, getApps } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js";
-import { getAuth, GoogleAuthProvider, onAuthStateChanged, signInWithPopup, signOut } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js";
+import { browserLocalPersistence, getAuth, GoogleAuthProvider, onAuthStateChanged, setPersistence, signInWithPopup, signOut } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js";
 import { getFirestore, collection, doc, getDocs, orderBy, query, serverTimestamp, setDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js";
 import { firebaseConfig } from "./firebase-config.js";
 
 const $ = (s) => document.querySelector(s);
 const el = {
-  banner: $("#setup-banner"), gate: $("#gate"), work: $("#workspace"), signin: $("#signin"), signout: $("#signout"),
+  banner: $("#setup-banner"), gate: $("#gate"), work: $("#workspace"), signin: $("#signin"), loginError: $("#login-error"), signout: $("#signout"),
   chip: $("#user-chip"), avatar: $("#avatar"), email: $("#email"), list: $("#list"), empty: $("#empty"), count: $("#count"),
   add: $("#add"), dialog: $("#dialog"), form: $("#form"), dtitle: $("#dtitle"), name: $("#name"), kind: $("#kind"),
   xtream: $("#xtream"), m3u: $("#m3u"), server: $("#server"), user: $("#user"), pass: $("#pass"), m3uurl: $("#m3uurl"),
@@ -27,25 +27,31 @@ if (!configured) {
 } else {
   const app = getApps()[0] || initializeApp(firebaseConfig);
   auth = getAuth(app); db = getFirestore(app);
-  onAuthStateChanged(auth, (u) => {
-    user = u;
-    el.gate.hidden = Boolean(u); el.work.hidden = !u; el.chip.hidden = !u; el.signout.hidden = !u;
-    if (u) {
-      const label = u.displayName || u.email || "Conta Google";
-      el.email.textContent = u.email || label; el.avatar.textContent = label.trim().charAt(0).toUpperCase() || "?";
-      load();
-    } else { sources = []; render(); }
-  });
+  onAuthStateChanged(auth, applyUser);
+}
+
+function applyUser(u) {
+  user = u;
+  el.gate.hidden = Boolean(u); el.work.hidden = !u; el.chip.hidden = !u; el.signout.hidden = !u;
+  if (u) {
+    const label = u.displayName || u.email || "Conta Google";
+    el.email.textContent = u.email || label; el.avatar.textContent = label.trim().charAt(0).toUpperCase() || "?";
+    el.loginError.hidden = true;
+    load();
+  } else { sources = []; render(); }
 }
 
 async function login() {
   if (!auth) return;
   el.signin.disabled = true;
+  el.loginError.hidden = true;
   try {
     // GitHub Pages não hospeda o auxiliar /__/auth do Firebase. Em celulares,
     // signInWithRedirect pode falhar quando o navegador bloqueia armazenamento de terceiros;
     // o popup iniciado pelo toque é o fluxo compatível recomendado para hospedagem externa.
-    await signInWithPopup(auth, new GoogleAuthProvider());
+    await setPersistence(auth, browserLocalPersistence);
+    const result = await signInWithPopup(auth, new GoogleAuthProvider());
+    applyUser(result.user);
   } catch (e) {
     const c = e?.code || "";
     const messages = {
@@ -54,8 +60,10 @@ async function login() {
       "auth/unauthorized-domain": "O endereço do site ainda não está autorizado no Firebase. O domínio alexsandermoreir.github.io precisa ser adicionado.",
       "auth/operation-not-allowed": "O login com Google ainda não está ativado no Firebase Authentication.",
       "auth/operation-not-supported-in-this-environment": "Este navegador não permite o login. Abra o site no Chrome ou Safari, fora de outro aplicativo.",
+      "auth/web-storage-unsupported": "O navegador bloqueou o salvamento do login. Abra o site no Chrome ou Safari normal e permita cookies.",
     };
-    toast(messages[c] || `Não foi possível entrar com Google (${c || "erro"}). Tente de novo.`);
+    el.loginError.textContent = messages[c] || `Não foi possível concluir o login com Google (${c || "erro"}). Feche e abra o site no Chrome ou Safari e tente novamente.`;
+    el.loginError.hidden = false;
   } finally {
     el.signin.disabled = false;
   }
