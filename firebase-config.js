@@ -7,5 +7,6 @@ export const firebaseConfig = {
   storageBucket: "iptv-config-2b7e9.firebasestorage.app",
   messagingSenderId: "437103170869",
   appId: "1:437103170869:web:16a2fafdaac153d9c2287c",
+  pairApiBase: "https://iptv-pair.iptv-pair.workers.dev",
   appCheckSiteKey: "YOUR_RECAPTCHA_ENTERPRISE_SITE_KEY"
 };

@@ -1,6 +1,6 @@
-// Minhas listas IPTV (site simples). Usa o Firebase já configurado em firebase-config.js e as regras atuais do Firestore:
-// cada pessoa lê/grava somente em users/{uid}/sources. Nada é enviado a terceiros e nada é gravado no navegador.
-import { initializeApp } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js";
+// Minhas listas IPTV. Usa o Firebase já configurado em firebase-config.js e as regras atuais do Firestore:
+// cada pessoa lê/grava somente em users/{uid}/sources. O pareamento cifra a fonte no navegador para a TV.
+import { initializeApp, getApps } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js";
 import { getAuth, GoogleAuthProvider, getRedirectResult, onAuthStateChanged, signInWithPopup, signInWithRedirect, signOut } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js";
 import { getFirestore, collection, doc, getDocs, orderBy, query, serverTimestamp, setDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js";
 import { firebaseConfig } from "./firebase-config.js";
@@ -25,7 +25,7 @@ function toast(msg) {
 if (!configured) {
   el.banner.hidden = false; el.signin.disabled = true;
 } else {
-  const app = initializeApp(firebaseConfig);
+  const app = getApps()[0] || initializeApp(firebaseConfig);
   auth = getAuth(app); db = getFirestore(app);
   getRedirectResult(auth).catch(() => toast("Não foi possível concluir o login. Tente de novo."));
   onAuthStateChanged(auth, (u) => {
