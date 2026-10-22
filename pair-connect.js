@@ -17,13 +17,13 @@ const API = String(firebaseConfig.pairApiBase || "").replace(/\/$/, "");
 // 1) lê o token do fragmento e remove do endereço imediatamente (não vai para histórico nem logs de terceiros)
 let pendingToken = null;
 {
-  const m = location.hash.match(/^#pair=([A-Za-z0-9_-]{20,100})$/);
+  const m = location.hash.match(/^#pair=([A-Za-z0-9_-]{20,100})(?:&mode=account)?$/);
   if (m) { pendingToken = m[1]; history.replaceState(null, "", location.pathname + location.search); }
 }
 
 const ERR = {
   404: "Código inválido ou expirado. Gere um novo na TV.",
-  409: "Este QR e o número mostrado na TV pertencem à mesma tentativa, que já foi iniciada. Feche a conexão na TV e abra ‘Minhas listas do site’ novamente para gerar um QR novo.",
+  409: "Este código já foi usado. Gere um novo na TV.",
   410: "O código expirou. Gere um novo na TV.",
   429: "Muitas tentativas. Aguarde alguns minutos.",
 };
@@ -58,6 +58,7 @@ function show(title, text, ...actions) {
 
 // ---------------------------------------------------------------- fluxo
 let session = null; // { pairId, claimSecret, device } — só em memória
+let chosenMode = null; // "account" | "list"
 
 async function currentUser() {
   const auth = getAuth(app);
@@ -67,7 +68,7 @@ async function currentUser() {
 
 async function cancelAndClose() {
   if (session) { try { await post("/pair/cancel", { pairId: session.pairId, claimSecret: session.claimSecret }); } catch { /* melhor esforço */ } }
-  session = null; dlg.close();
+  session = null; chosenMode = null; dlg.close();
 }
 
 function decodeB64Url(value) {
@@ -97,25 +98,6 @@ async function claim(tokenOrCode, isCode) {
   } catch (e) { show("Não foi possível conectar", ERR[e.status] || "Tente novamente em instantes.", btn("Fechar", () => dlg.close(), true)); }
 }
 
-// A reivindicação do código é de uso único. Primeiro fazemos login e só então
-// consumimos o QR/código; assim uma janela de login interrompida não invalida o QR.
-async function beginClaim(tokenOrCode, isCode) {
-  const user = await currentUser();
-  if (user) { await claim(tokenOrCode, isCode); return; }
-
-  const enter = async () => {
-    try {
-      await signInWithPopup(getAuth(app), new GoogleAuthProvider());
-      await claim(tokenOrCode, isCode);
-    } catch {
-      show("Login não concluído", "O QR continua válido. Tente entrar com Google novamente.",
-        btn("Tentar de novo", enter, true), btn("Cancelar", () => dlg.close()));
-    }
-  };
-  show("Entre com Google", "Depois do login, vamos conectar esta TV e você poderá escolher sua lista.",
-    btn("Entrar com Google", enter, true), btn("Fechar", () => dlg.close()));
-}
-
 async function afterClaim() {
   const user = await currentUser();
   if (!user) {
@@ -131,12 +113,31 @@ async function afterClaim() {
     await post("/pair/choosing", { pairId: session.pairId, claimSecret: session.claimSecret }, idToken);
     const snap = await getDocs(query(collection(getFirestore(app), "users", user.uid, "sources"), orderBy("createdAt", "desc")));
     const sources = snap.docs.map((d) => ({ id: d.id, name: d.data().name || "Lista sem nome" }));
+    if (!chosenMode) {
+      show(`TV encontrada: ${session.device}`, "O que você quer fazer?",
+        btn("Entrar na TV com minha conta", () => { chosenMode = "account"; authorizeAccount(); }, true),
+        btn("Enviar só uma lista", () => { chosenMode = "list"; afterClaim(); }), btn("Cancelar", cancelAndClose));
+      return;
+    }
     if (!sources.length) { show("Nenhuma lista salva", "Salve uma lista no site e volte a ler o QR code da TV.", btn("Fechar", cancelAndClose, true)); return; }
     const sel = el("select", "", "width:100%;padding:12px;border-radius:10px;background:#1f262e;color:#f2f4f5;border:1px solid #2a323b;font-size:16px");
     for (const s of sources) sel.append(new Option(s.name, s.id));
     show(`Vincular à TV “${session.device}”`, "Escolha a lista e confirme. A TV receberá o acesso a ela uma única vez.", sel,
       btn("Vincular à TV", () => authorize(sel.value, sel.selectedOptions[0].text), true), btn("Cancelar", cancelAndClose));
   } catch (e) { show("Não foi possível continuar", ERR[e.status] || "Tente novamente.", btn("Fechar", cancelAndClose, true)); }
+}
+
+/** A TV entra na conta: recebe (cifrado, uma vez) o token de renovação do Firebase. Ela passa a ler/gravar só sob as regras do dono. */
+async function authorizeAccount() {
+  show("Enviando…", "Conectando a TV à sua conta.");
+  try {
+    const user = await currentUser();
+    const payload = { kind: "account", name: user.displayName || user.email || "Conta Google", email: user.email || "", uid: user.uid, refreshToken: user.refreshToken };
+    const encrypted = await encryptForTv(session.publicKey, payload);
+    await post("/pair/authorize", { pairId: session.pairId, claimSecret: session.claimSecret, payload: encrypted }, await user.getIdToken());
+    session = null; chosenMode = null;
+    show("Enviado para a TV", "Olhe a TV: ela mostrará “Conta conectada” quando receber o acesso. Depois disso, listas, perfis, favoritos e histórico acompanham sua conta.", btn("Fechar", () => dlg.close(), true));
+  } catch (e) { show("Não foi possível vincular", ERR[e.status] || "Tente novamente.", btn("Fechar", cancelAndClose, true)); }
 }
 
 async function authorize(sourceId, name) {
@@ -162,14 +163,12 @@ function askCode() {
   const input = el("input", "", "width:100%;padding:12px;border-radius:10px;background:#1f262e;color:#f2f4f5;border:1px solid #2a323b;font-size:20px;letter-spacing:3px;text-transform:uppercase");
   input.placeholder = "ABCD 1234"; input.maxLength = 12; input.autocomplete = "off"; input.autocapitalize = "characters";
   show("Conectar uma TV", "Digite o código mostrado na TV (Conectar pelo celular).", input,
-    btn("Continuar", () => { const c = input.value.replace(/[^A-Za-z0-9]/g, ""); if (c.length >= 8) beginClaim(c, true); }, true), btn("Fechar", () => dlg.close()));
+    btn("Continuar", () => { const c = input.value.replace(/[^A-Za-z0-9]/g, ""); if (c.length >= 8) claim(c, true); }, true), btn("Fechar", () => dlg.close()));
 }
 
 if (!API) {
   if (pendingToken) show("Conexão indisponível", "O servidor de pareamento ainda não foi configurado neste site (pairApiBase).", btn("Fechar", () => dlg.close(), true));
 } else {
-  const open = btn("Conectar uma TV com código", askCode);
-  open.style.cssText += ";position:fixed;right:16px;bottom:16px;z-index:50";
-  document.body.append(open);
-  if (pendingToken) { const t = pendingToken; pendingToken = null; beginClaim(t, false); }
+  document.addEventListener("iptv:pair", askCode);
+  if (pendingToken) { const t = pendingToken; pendingToken = null; claim(t, false); }
 }

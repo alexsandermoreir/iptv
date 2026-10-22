@@ -2,120 +2,60 @@
 <html lang="pt-BR">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#0b0d10">
   <meta name="referrer" content="no-referrer">
-  <title>IPTV Premium — Minhas listas</title>
-  <style>
-    :root { --bg:#0b0d10; --surface:#14181d; --surface-hi:#1f262e; --line:#2a323b; --text:#f2f4f5; --dim:#a9b3bc; --accent:#26c6b0; --danger:#ff6b6b; }
-    * { box-sizing:border-box; }
-    html,body { margin:0; background:var(--bg); color:var(--text); font-family:Roboto,system-ui,-apple-system,"Segoe UI",sans-serif; }
-    body { min-height:100vh; background:radial-gradient(900px 400px at 15% -10%, rgba(38,198,176,.14), transparent 60%), var(--bg); }
-    header { display:flex; align-items:center; gap:12px; padding:16px 20px; max-width:880px; margin:0 auto; }
-    .logo { width:44px; height:44px; border-radius:12px; background:linear-gradient(135deg,#08121a,#0e3a42); display:grid; place-items:center; border:1px solid var(--line); }
-    h1 { font-size:20px; margin:0; font-weight:600; }
-    .sub { color:var(--dim); font-size:13px; }
-    .grow { flex:1; }
-    main { max-width:880px; margin:0 auto; padding:8px 20px 80px; }
-    .card { background:var(--surface); border:1px solid var(--line); border-radius:16px; padding:18px; margin-bottom:16px; }
-    h2 { font-size:18px; margin:0 0 6px; }
-    p { color:var(--dim); line-height:1.5; margin:6px 0; }
-    ol { color:var(--dim); line-height:1.7; padding-left:20px; margin:8px 0 0; }
-    ol b { color:var(--text); }
-    button { font:inherit; cursor:pointer; border:0; border-radius:10px; padding:11px 16px; background:var(--surface-hi); color:var(--text); font-weight:500; }
-    button:hover { background:var(--line); }
-    button.primary { background:var(--accent); color:#000; font-weight:600; }
-    button.primary:hover { filter:brightness(1.1); }
-    button.danger { color:var(--danger); }
-    button:focus-visible, input:focus-visible, select:focus-visible { outline:3px solid var(--accent); outline-offset:2px; }
-    button[disabled] { opacity:.5; cursor:default; }
-    .row { display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
-    .item { display:flex; align-items:center; gap:14px; background:var(--surface-hi); border:1px solid var(--line); border-radius:14px; padding:14px; margin-top:10px; }
-    .item .ic { width:40px; height:40px; border-radius:10px; background:rgba(38,198,176,.15); color:var(--accent); display:grid; place-items:center; font-weight:700; flex:none; }
-    .item .meta { flex:1; min-width:0; }
-    .item strong { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-    .item span.d { color:var(--dim); font-size:13px; }
-    .empty { text-align:center; padding:28px 8px; color:var(--dim); }
-    .chip { display:inline-flex; align-items:center; gap:8px; background:var(--surface-hi); border:1px solid var(--line); border-radius:999px; padding:6px 12px 6px 6px; font-size:14px; }
-    .chip .av { width:28px; height:28px; border-radius:50%; background:var(--accent); color:#000; display:grid; place-items:center; font-weight:700; }
-    dialog { border:1px solid var(--line); border-radius:18px; background:var(--surface); color:var(--text); width:min(480px,calc(100% - 28px)); padding:20px; }
-    dialog::backdrop { background:rgba(0,0,0,.65); }
-    label { display:block; font-size:13px; color:var(--dim); margin:12px 0 4px; }
-    input, select { width:100%; padding:12px; border-radius:10px; border:1px solid var(--line); background:var(--bg); color:var(--text); font:inherit; }
-    .err { color:var(--danger); font-size:14px; margin-top:10px; }
-    .toast { position:fixed; left:50%; bottom:22px; transform:translate(-50%,20px); background:var(--surface-hi); border:1px solid var(--line); padding:12px 18px; border-radius:12px; opacity:0; pointer-events:none; transition:.2s; max-width:calc(100% - 28px); }
-    .toast.show { opacity:1; transform:translate(-50%,0); }
-    [hidden] { display:none !important; }
-    .banner { border-color:#6b4a1f; background:#2a2010; color:#ffd9a0; }
-  </style>
+  <title>IPTV Premium</title>
+  <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <header>
-    <div class="logo" aria-hidden="true">
-      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#26c6b0" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="13" rx="3"/><path d="M9 3l3 3 3-3"/><path d="M10.5 10.5v4l3.5-2z" fill="#26c6b0"/></svg>
+  <div id="boot" class="center"><div class="spinner" aria-label="Carregando"></div></div>
+
+  <section id="gate" class="center" hidden>
+    <div class="gate-card">
+      <div class="logo big" aria-hidden="true"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#26c6b0" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="13" rx="3"/><path d="M9 3l3 3 3-3"/><path d="M10.5 10.5v4l3.5-2z" fill="#26c6b0"/></svg></div>
+      <h1>IPTV Premium</h1>
+      <p>Suas listas, canais, filmes e séries — e o ponto onde você parou — na TV e no navegador, ligados à sua conta Google.</p>
+      <button id="signin" class="primary lg">Entrar com Google</button>
+      <p id="setup-banner" class="warn" hidden>O Firebase ainda não está configurado neste site (firebase-config.js).</p>
+      <p id="gate-err" class="err" hidden></p>
     </div>
-    <div><h1>IPTV Premium</h1><div class="sub">Minhas listas, salvas na minha conta</div></div>
-    <div class="grow"></div>
-    <span class="chip" id="user-chip" hidden><span class="av" id="avatar">?</span><span id="email"></span></span>
-    <button id="signout" hidden>Sair</button>
-  </header>
+  </section>
 
-  <main>
-    <div class="card banner" id="setup-banner" hidden>O Firebase ainda não está configurado neste site (firebase-config.js).</div>
+  <div id="app" hidden>
+    <nav id="nav" aria-label="Menu principal">
+      <div class="brand"><span class="logo" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#26c6b0" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="13" rx="3"/><path d="M9 3l3 3 3-3"/><path d="M10.5 10.5v4l3.5-2z" fill="#26c6b0"/></svg></span><b>IPTV Premium</b></div>
+      <button data-v="home">Início</button>
+      <button data-v="live">TV ao vivo</button>
+      <button data-v="movies">Filmes</button>
+      <button data-v="series">Séries</button>
+      <button data-v="search">Pesquisa</button>
+      <button data-v="library">Minha biblioteca</button>
+      <button data-v="settings">Configurações</button>
+      <div class="grow"></div>
+      <button id="who" class="who" title="Trocar de perfil"><span class="av" id="who-av">?</span><span id="who-name"></span></button>
+      <div id="syncline" class="small dim" aria-live="polite"></div>
+    </nav>
+    <main id="view" tabindex="-1"></main>
+  </div>
 
-    <section class="card" id="gate">
-      <h2>Entre para ver suas listas</h2>
-      <p>Suas listas IPTV ficam salvas na sua conta Google, protegidas por regras que só permitem acesso a você. Ninguém mais lê.</p>
-      <div class="row" style="margin-top:12px"><button class="primary" id="signin">Entrar com Google</button></div>
-      <p class="err" id="login-error" role="alert" hidden></p>
-    </section>
+  <div id="player" hidden>
+    <div class="ptop">
+      <button id="p-close" aria-label="Fechar player">‹ Voltar</button>
+      <div class="ptitle"><b id="p-title"></b><span id="p-sub" class="dim small"></span></div>
+      <select id="p-var" aria-label="Qualidade" hidden></select>
+      <button id="p-fav" aria-label="Favorito" hidden>☆</button>
+    </div>
+    <video id="video" controls autoplay playsinline></video>
+    <div id="p-msg" class="pmsg" hidden></div>
+  </div>
 
-    <section id="workspace" hidden>
-      <div class="card">
-        <div class="row">
-          <div class="grow"><h2>Suas listas <span class="sub" id="count"></span></h2><p>Cadastre uma vez aqui. No aplicativo da TV você escolhe a lista, sem digitar nada.</p></div>
-          <button class="primary" id="add">+ Nova lista</button>
-        </div>
-        <div id="list"></div>
-        <div class="empty" id="empty" hidden>Nenhuma lista ainda. Toque em “Nova lista”.</div>
-      </div>
+  <div id="toast" class="toast" role="status"></div>
+  <dialog id="dlg"></dialog>
 
-      <div class="card">
-        <h2>Como levar para a TV</h2>
-        <ol>
-          <li>Na TV, abra <b>Listas e Fontes → Adicionar fonte → Minhas listas do site (QR code)</b>.</li>
-          <li>Com o celular, escaneie o QR code da TV. O site abre e pede que você entre com Google.</li>
-          <li>Escolha uma lista salva e toque em <b>Vincular à TV</b>. A TV baixa a lista e carrega o catálogo.</li>
-        </ol>
-      </div>
-    </section>
-  </main>
-
-  <dialog id="dialog">
-    <form id="form" method="dialog">
-      <h2 id="dtitle">Nova lista</h2>
-      <label for="name">Nome</label>
-      <input id="name" maxlength="48" autocomplete="off" placeholder="Ex.: Casa">
-      <label for="kind">Tipo</label>
-      <select id="kind"><option value="xtream">Xtream Codes (servidor, usuário e senha)</option><option value="m3u">Link M3U</option></select>
-      <div id="xtream">
-        <label for="server">Servidor</label><input id="server" inputmode="url" autocomplete="off" placeholder="http://servidor.com:8080">
-        <label for="user">Usuário</label><input id="user" autocomplete="off">
-        <label for="pass">Senha</label><input id="pass" type="password" autocomplete="off">
-      </div>
-      <div id="m3u" hidden>
-        <label for="m3uurl">URL da lista M3U</label><input id="m3uurl" inputmode="url" autocomplete="off" placeholder="http://...">
-      </div>
-      <div class="err" id="ferr" hidden></div>
-      <div class="row" style="margin-top:16px">
-        <button type="submit" class="primary" id="save">Salvar</button>
-        <button type="button" id="cancel">Cancelar</button>
-      </div>
-    </form>
-  </dialog>
-
-  <div class="toast" id="toast" role="status"></div>
-  <script type="module" src="main.js?v=20261021-2"></script>
-  <script type="module" src="pair-connect.js?v=20261021-2"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hls.js/1.5.17/hls.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mpegts.js@1.7.3/dist/mpegts.js"></script>
+  <script type="module" src="app.js"></script>
+  <script type="module" src="pair-connect.js"></script>
 </body>
 </html>
