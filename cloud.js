@@ -25,11 +25,17 @@ export const currentDb = () => db;
 
 export async function login() {
   const p = new GoogleAuthProvider();
+  p.setCustomParameters({ prompt: "select_account" });
   try {
-    if (matchMedia("(pointer: coarse)").matches) await signInWithRedirect(auth, p); else await signInWithPopup(auth, p);
+    // Janela (pop-up) primeiro: o redirecionamento perde a sessão em apps instalados no iPhone (Safari isola o armazenamento).
+    await signInWithPopup(auth, p);
   } catch (e) {
     const c = e?.code || "";
-    throw new Error(c.includes("popup-blocked") ? "O navegador bloqueou a janela de login. Permita pop-ups." : c.includes("popup-closed") ? "Login cancelado."
+    if (c.includes("popup-blocked") || c.includes("operation-not-supported") || c.includes("web-storage-unsupported")) {
+      try { await signInWithRedirect(auth, p); return; } catch { /* cai na mensagem abaixo */ }
+    }
+    const standalone = matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
+    throw new Error(c.includes("popup-blocked") ? "O navegador bloqueou a janela de login. Permita pop-ups." : c.includes("popup-closed") ? (standalone ? "O login foi interrompido. Se isso se repetir no app instalado, me avise: vou ligar o app por código." : "Login cancelado.")
       : c.includes("unauthorized-domain") ? "Este endereço não está autorizado no Firebase Auth." : "Não foi possível entrar com Google.");
   }
 }
