@@ -345,6 +345,8 @@ async function playLive(sc, idx = 0, mode = "hls", keep = false) {
   openPlayer(sc.name, `${v.group}`);
   // aparelhos sem a tecnologia de vídeo do navegador (MSE): iPhone com iOS anterior ao 17.1
   const canHls = !!(window.Hls && Hls.isSupported()), canTs = !!(window.mpegts && mpegts.isSupported());
+  note(`suporte: hls.js=${canHls} mpegts.js=${canTs} MMS=${!!window.ManagedMediaSource} MSE=${!!window.MediaSource}`);
+  video.disableRemotePlayback = true; // o iOS exige isto para o vídeo vindo de MediaSource gerenciado (sem AirPlay neste player)
   if (!canHls && !canTs) { pmsg("Este aparelho não consegue tocar canais ao vivo no navegador (no iPhone, isso exige iOS 17.1 ou mais novo). Use a TV, ou atualize o iOS."); return; }
   // se o navegador só tem o modo nativo de HLS, mas o provedor entrega vídeo bruto (TS), vai direto para o modo TS
   if (mode === "hls" && !canHls && canTs && src?.kind === "xtream" && !v.url) return playLive(sc, idx, "ts", keep);
@@ -380,7 +382,7 @@ async function playLive(sc, idx = 0, mode = "hls", keep = false) {
       hls.loadSource(media); hls.attachMedia(video);
     } else if (isHls && video.canPlayType("application/vnd.apple.mpegurl")) { video.src = media; video.onloadeddata = () => pmsg(""); video.onerror = () => fail(`erro nativo ${video.error?.code || ""}`); }
     else if (window.mpegts?.isSupported()) {
-      const ts = mpegts.createPlayer({ type: "mpegts", isLive: true, url: media }); P.ts = ts;
+      const ts = mpegts.createPlayer({ type: "mpegts", isLive: true, url: media }, { enableWorker: false, liveBufferLatencyChasing: true, lazyLoadMaxDuration: 30 }); P.ts = ts;
       ts.on(mpegts.Events.ERROR, (type, detail, extra) => fail(`${type}/${detail}${extra?.code ? ` HTTP ${extra.code}` : ""}${extra?.msg ? ` ${extra.msg}` : ""}`)); ts.attachMediaElement(video); ts.load(); ts.play().then(() => pmsg("")).catch(() => {});
     } else { video.src = media; video.onerror = () => fail(`erro nativo ${video.error?.code || ""}`); }
     video.onplaying = () => pmsg("");
