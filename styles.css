@@ -86,7 +86,7 @@ dialog::backdrop { background:rgba(0,0,0,.7); }
 #player.idle .ptop { opacity:0; pointer-events:none; }
 .ptitle { flex:1; min-width:0; display:flex; flex-direction:column; } .ptitle b, .ptitle span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 #p-var { width:auto; }
-.pmsg { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); background:#000c; padding:16px 22px; border-radius:14px; max-width:80%; text-align:center; z-index:3; }
+.pmsg { white-space:pre-line; font-size:14px; position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); background:#000c; padding:16px 22px; border-radius:14px; max-width:80%; text-align:center; z-index:3; }
 
 @media (max-width:760px) {
   #app { grid-template-columns:1fr; padding-bottom:62px; }

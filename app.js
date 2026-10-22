@@ -330,8 +330,10 @@ function saveNow() {
 }
 
 /** Ao vivo: tenta HLS (.m3u8) pela variante escolhida; se falhar, MPEG-TS; depois passa para a próxima variante (failover). */
-async function playLive(sc, idx = 0, mode = "hls") {
-  teardown(); P.cur = { live: true, key: sc.key, sc, idx };
+async function playLive(sc, idx = 0, mode = "hls", keep = false) {
+  teardown(); P.recovered = false; P.cur = { live: true, key: sc.key, sc, idx };
+  if (!keep) P.why = []; // motivos das tentativas, mostrados se tudo falhar
+  const note = (m) => { P.why.push(`v${idx + 1}/${mode}: ${m}`); console.warn("[iptv]", P.why.at(-1)); };
   const v = sc.variants[idx], src = G.byId[v.sid];
   openPlayer(sc.name, `${v.group}`);
   const sel = $("#p-var"); sel.hidden = sc.variants.length < 2;
@@ -341,9 +343,10 @@ async function playLive(sc, idx = 0, mode = "hls") {
   addHist(sc.key);
   const fail = (why) => {
     if (P.cur?.sc !== sc || P.cur.idx !== idx) return;
-    if (mode === "hls" && src?.kind === "xtream" && !v.url) return playLive(sc, idx, "ts");
-    if (idx + 1 < sc.variants.length) { pmsg("Esta versão falhou. Tentando a próxima…"); return playLive(sc, idx + 1, "hls"); }
-    pmsg(why || "Não foi possível reproduzir este canal no navegador. Tente na TV ou outra versão.");
+    if (why) note(why);
+    if (mode === "hls" && src?.kind === "xtream" && !v.url) return playLive(sc, idx, "ts", true);
+    if (idx + 1 < sc.variants.length) { pmsg("Esta versão falhou. Tentando a próxima…"); return playLive(sc, idx + 1, "hls", true); }
+    pmsg(`Não foi possível reproduzir este canal no navegador. Tente na TV ou outra versão.\n\nDetalhes técnicos (me envie isto):\n${P.why.slice(-6).join("\n")}`);
   };
   try {
     pmsg("Conectando…");
@@ -353,16 +356,22 @@ async function playLive(sc, idx = 0, mode = "hls") {
     if (isHls && window.Hls?.isSupported()) {
       const hls = new Hls({ lowLatencyMode: false, maxBufferLength: 20 }); P.hls = hls;
       hls.on(Hls.Events.MANIFEST_PARSED, () => { pmsg(""); video.play().catch(() => {}); });
-      hls.on(Hls.Events.ERROR, (_, d) => { if (d.fatal) { if (d.type === Hls.ErrorTypes.NETWORK_ERROR && d.details === "manifestLoadError") fail(); else if (d.type === Hls.ErrorTypes.MEDIA_ERROR) hls.recoverMediaError(); else fail(); } });
+      hls.on(Hls.Events.ERROR, (_, d) => {
+        const code = d.response?.code ?? d.networkDetails?.status ?? "";
+        const info = `${d.type}/${d.details}${code ? ` HTTP ${code}` : ""}${d.fatal ? " (fatal)" : ""}`;
+        if (!d.fatal) { console.warn("[iptv] hls", info); return; }
+        if (d.type === Hls.ErrorTypes.MEDIA_ERROR && !P.recovered) { P.recovered = true; note(info + " → tentando recuperar"); hls.recoverMediaError(); return; }
+        fail(info);
+      });
       hls.loadSource(media); hls.attachMedia(video);
-    } else if (isHls && video.canPlayType("application/vnd.apple.mpegurl")) { video.src = media; video.onloadeddata = () => pmsg(""); video.onerror = () => fail(); }
+    } else if (isHls && video.canPlayType("application/vnd.apple.mpegurl")) { video.src = media; video.onloadeddata = () => pmsg(""); video.onerror = () => fail(`erro nativo ${video.error?.code || ""}`); }
     else if (window.mpegts?.isSupported()) {
       const ts = mpegts.createPlayer({ type: "mpegts", isLive: true, url: media }); P.ts = ts;
-      ts.on(mpegts.Events.ERROR, () => fail()); ts.attachMediaElement(video); ts.load(); ts.play().then(() => pmsg("")).catch(() => {});
-    } else { video.src = media; video.onerror = () => fail(); }
+      ts.on(mpegts.Events.ERROR, (type, detail, extra) => fail(`${type}/${detail}${extra?.code ? ` HTTP ${extra.code}` : ""}${extra?.msg ? ` ${extra.msg}` : ""}`)); ts.attachMediaElement(video); ts.load(); ts.play().then(() => pmsg("")).catch(() => {});
+    } else { video.src = media; video.onerror = () => fail(`erro nativo ${video.error?.code || ""}`); }
     video.onplaying = () => pmsg("");
     loadNowNext(sc, v, src);
-  } catch (e) { pmsg(e.message || "Não foi possível abrir o canal."); }
+  } catch (e) { note(e.message || "erro ao preparar"); pmsg(e.message || "Não foi possível abrir o canal."); }
 }
 async function loadNowNext(sc, v, src) {
   if (src?.kind !== "xtream" || !v.streamId) return;
