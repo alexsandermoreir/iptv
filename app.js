@@ -352,6 +352,13 @@ async function playLive(sc, idx = 0, mode = "hls", keep = false) {
     pmsg("Conectando…");
     const url = C.liveUrl(src, v, mode === "ts" ? "ts" : "m3u8");
     const media = await K.proxied(url);
+    // sondagem: se o provedor recusar, mostra o status e o começo da resposta (sem a senha)
+    { const ctl = new AbortController();
+      try {
+        const pr = await fetch(media, { signal: ctl.signal, cache: "no-store" });
+        if (!pr.ok) { const body = (await pr.text()).replace(/\s+/g, " ").slice(0, 160); note(`sondagem: provedor respondeu HTTP ${pr.status} ${body ? `"${body}"` : "(sem texto)"}`); return fail(`HTTP ${pr.status}`); }
+        else note(`sondagem: HTTP ${pr.status} ${pr.headers.get("content-type") || ""}`);
+      } catch (e) { note(`sondagem: falha de rede (${e.message})`); } finally { ctl.abort(); } }
     const isHls = mode === "hls" && (!v.url || /\.m3u8(\?|$)/i.test(v.url));
     if (isHls && window.Hls?.isSupported()) {
       const hls = new Hls({ lowLatencyMode: false, maxBufferLength: 20 }); P.hls = hls;
