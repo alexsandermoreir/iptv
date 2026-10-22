@@ -1,17 +1,51 @@
 // Conta Google + Firestore + sincronização + proxy de mídia. Mesmo formato de documentos que o app da TV usa
 // (users/{uid}/sources e users/{uid}/sync/{settings|profiles|p_<perfil>}), então tudo acompanha a conta.
 import { initializeApp, getApps } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js";
-import { getAuth, GoogleAuthProvider, getRedirectResult, onAuthStateChanged, signInWithPopup, signInWithRedirect, signOut } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js";
+import { getAuth, GoogleAuthProvider, OAuthProvider, getRedirectResult, onAuthStateChanged, signInWithCredential, signInWithPopup, signInWithRedirect, signOut } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js";
 import { getFirestore, initializeFirestore, collection, doc, getDocs, orderBy, query, serverTimestamp, setDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js";
 import { firebaseConfig } from "./firebase-config.js";
+import * as GL from "./google-login.js";
+
+// A volta do login direto (#id_token=...) é lida e apagada do endereço ANTES de qualquer outra coisa.
+const directReturn = GL.captureReturn();
 
 export const configured = ["apiKey", "authDomain", "projectId", "appId"].every((k) => typeof firebaseConfig?.[k] === "string" && firebaseConfig[k] && !firebaseConfig[k].startsWith("YOUR_"));
 export const API = String(firebaseConfig?.pairApiBase || "").replace(/\/$/, "");
+const WEB_CLIENT_ID = /^[0-9]+-[a-z0-9]+\.apps\.googleusercontent\.com$/.test(String(firebaseConfig?.googleWebClientId || "")) ? firebaseConfig.googleWebClientId : "";
 let auth, db;
 export let user = null;
 const listeners = new Set();
 export const onStatus = (fn) => listeners.add(fn);
 const emit = (s) => listeners.forEach((fn) => fn(s));
+
+/** Texto curto para a tela: mensagem + código técnico (para o usuário poder nos enviar). */
+export function describeLoginError(e) {
+  const c = String(e?.code || e?.name || "erro");
+  const m = c.includes("popup-blocked") ? "O navegador bloqueou a janela de login. Permita pop-ups ou use “Outra forma de entrar”."
+    : c.includes("popup-closed") || c.includes("cancelled-popup") ? "A janela de login fechou antes de concluir. Tente “Outra forma de entrar”."
+    : c.includes("unauthorized-domain") ? "Este endereço não está autorizado no Firebase Auth."
+    : c.includes("invalid-credential") || c.includes("invalid-idp-response") ? "O Firebase não aceitou o login do Google (o ID do cliente Web confere com o do Firebase?)."
+    : c.includes("network-request-failed") ? "Sem conexão com o Google/Firebase. Verifique a internet."
+    : c.startsWith("google/") ? (e?.message || "Falha no login direto.")
+    : "Não foi possível entrar com Google.";
+  return `${m} [código: ${c}]`;
+}
+
+let pendingError = "";
+/** Erro de login detectado ao abrir a página (volta do Google ou do redirecionamento); lido uma vez. */
+export const takeLoginError = () => { const e = pendingError; pendingError = ""; return e; };
+
+async function finishDirect(r) {
+  const v = await GL.verifyReturn(r, GL.takePending(), WEB_CLIENT_ID);
+  try {
+    // Sem nonce: o Firebase confere assinatura, emissor e destinatário (aud) do token; o nonce já foi conferido acima.
+    await signInWithCredential(auth, GoogleAuthProvider.credential(v.idToken));
+  } catch (e) {
+    if (!String(e?.code || "").includes("nonce")) throw e;
+    // Se o Firebase exigir o nonce, mandamos o original (ele confere o SHA-256 com o que foi ao Google).
+    await signInWithCredential(auth, new OAuthProvider("google.com").credential({ idToken: v.idToken, rawNonce: v.rawNonce }));
+  }
+}
 
 export function initCloud(onUser) {
   if (!configured) { onUser(null, "not_configured"); return; }
@@ -19,26 +53,43 @@ export function initCloud(onUser) {
   auth = getAuth(app);
   // Safari/iPhone às vezes bloqueia o canal contínuo do Firestore; a detecção automática troca para "long polling"
   try { db = initializeFirestore(app, { experimentalAutoDetectLongPolling: true }); } catch { db = getFirestore(app); }
-  getRedirectResult(auth).catch(() => emit({ error: "Não foi possível concluir o login." }));
-  onAuthStateChanged(auth, (u) => { user = u; onUser(u); });
+  const watch = () => onAuthStateChanged(auth, (u) => { user = u; onUser(u, u ? "signed_in" : "signed_out", u ? "" : takeLoginError()); });
+  if (directReturn) {
+    // Só começa a observar depois de concluir, para não piscar a tela de login nem perder a mensagem de erro.
+    finishDirect(directReturn).catch((e) => { pendingError = describeLoginError(e); }).finally(watch);
+    return;
+  }
+  getRedirectResult(auth).catch((e) => { pendingError = describeLoginError(e); }).finally(watch);
 }
 export const currentAuth = () => auth;
 export const currentDb = () => db;
 
-export async function login() {
+/** No app instalado do iPhone o pop-up/redirecionamento do Firebase perde o resultado; lá usamos o login direto. */
+export const directLoginAvailable = () => !!WEB_CLIENT_ID;
+export const prefersDirectLogin = () => GL.isIosStandalone();
+
+/**
+ * method: "auto" (padrão), "direct" (Google na mesma janela) ou "popup" (método do Firebase).
+ * Lança Error cuja mensagem já inclui o código técnico.
+ */
+export async function login(method = "auto") {
+  if (method === "auto") method = prefersDirectLogin() && WEB_CLIENT_ID ? "direct" : "popup";
+  if (method === "direct") {
+    try { await GL.startDirectLogin({ clientId: WEB_CLIENT_ID, redirectUri: GL.redirectUriFor(location.href, firebaseConfig?.googleRedirectUri) }); }
+    catch (e) { throw new Error(describeLoginError(e)); }
+    return;
+  }
   const p = new GoogleAuthProvider();
   p.setCustomParameters({ prompt: "select_account" });
   try {
-    // Janela (pop-up) primeiro: o redirecionamento perde a sessão em apps instalados no iPhone (Safari isola o armazenamento).
     await signInWithPopup(auth, p);
   } catch (e) {
     const c = e?.code || "";
     if (c.includes("popup-blocked") || c.includes("operation-not-supported") || c.includes("web-storage-unsupported")) {
-      try { await signInWithRedirect(auth, p); return; } catch { /* cai na mensagem abaixo */ }
+      if (WEB_CLIENT_ID) return login("direct");
+      try { await signInWithRedirect(auth, p); return; } catch (e2) { throw new Error(describeLoginError(e2)); }
     }
-    const standalone = matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
-    throw new Error(c.includes("popup-blocked") ? "O navegador bloqueou a janela de login. Permita pop-ups." : c.includes("popup-closed") ? (standalone ? "O login foi interrompido. Se isso se repetir no app instalado, me avise: vou ligar o app por código." : "Login cancelado.")
-      : c.includes("unauthorized-domain") ? "Este endereço não está autorizado no Firebase Auth." : "Não foi possível entrar com Google.");
+    throw new Error(describeLoginError(e));
   }
 }
 export const logout = () => signOut(auth);

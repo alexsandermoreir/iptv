@@ -116,3 +116,21 @@ body { -webkit-tap-highlight-color: transparent; overscroll-behavior-y: none; }
 @media (max-width:760px) { #nav { padding-bottom: max(6px, env(safe-area-inset-bottom)); } #app { padding-bottom: calc(62px + env(safe-area-inset-bottom)); } }
 .ptop { padding-top: max(10px, env(safe-area-inset-top)); padding-left: max(14px, env(safe-area-inset-left)); }
 @media (min-width:761px) and (max-width:1100px) { :root { --nav: 180px; } .split { grid-template-columns: 200px 1fr; } #view { padding: 18px 18px 80px; } }
+/* iPhone: sem zoom por toque duplo ou ao focar campos; tamanhos menores */
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; touch-action: manipulation; }
+button, a, .card, .row, input, select { touch-action: manipulation; }
+input, select, textarea { font-size: 16px; }
+@media (max-width: 760px) {
+  body { font-size: 14px; }
+  h1 { font-size: 21px; } h2 { font-size: 17px; margin: 16px 0 8px; } h3 { font-size: 15px; }
+  #view { padding: 12px 12px 92px; }
+  .card { width: 112px; border-radius: 10px; } .card.wide { width: 164px; }
+  .card .t { padding: 6px 8px 8px; font-size: 12px; }
+  .grid { grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 10px; }
+  .row { padding: 8px 10px; gap: 10px; } .row .lg { width: 44px; height: 30px; }
+  .panel { padding: 12px; } .item { padding: 10px; gap: 10px; }
+  button { padding: 9px 12px; }
+  #nav button[data-v] { padding: 9px 10px; font-size: 13px; }
+  .bar input[type=search] { max-width: none; width: 100%; }
+  dialog { padding: 14px; }
+}

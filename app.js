@@ -532,6 +532,7 @@ function setTv() {
 function setAccount() {
   const u = K.user;
   return h("div", { class: "panel" }, h("h3", {}, u?.displayName || "Conta Google"), h("p", {}, u?.email || ""), h("h3", { style: "margin-top:18px" }, "Instalar no aparelho"), installPanel(),
+    h("div", { class: "bar" }, h("button", { onclick: async () => { try { const r = await navigator.serviceWorker?.getRegistration(); await r?.update(); } catch {} location.reload(); } }, "Procurar atualização do app")),
     h("div", { class: "bar" }, h("button", { onclick: async () => { await K.flush(); await K.pull(); bump(); render(); toast("Sincronizado."); } }, "Sincronizar agora"),
       h("button", { onclick: async () => { await K.flush(); await K.logout(); location.reload(); } }, "Sair")));
 }
@@ -557,7 +558,20 @@ function chooseProfile() {
 }
 $("#who").addEventListener("click", async () => { await chooseProfile(); bump(); render(); });
 document.querySelectorAll("#nav button[data-v]").forEach((b) => b.addEventListener("click", () => go(b.dataset.v)));
-$("#signin").addEventListener("click", async () => { try { await K.login(); } catch (e) { const el = $("#gate-err"); el.textContent = e.message; el.hidden = false; } });
+// Login: no app instalado do iPhone o padrão é o login direto (Google na mesma janela); nos demais, a janela do Firebase.
+// O botão "Outra forma de entrar" tenta o outro método. Erros aparecem com o código técnico para diagnóstico.
+const gateErr = (msg) => { const el = $("#gate-err"); el.textContent = msg || ""; el.hidden = !msg; };
+const altMethod = () => (K.prefersDirectLogin() && K.directLoginAvailable() ? "popup" : K.directLoginAvailable() ? "direct" : "");
+const doLogin = async (method) => { gateErr(""); try { await K.login(method); } catch (e) { gateErr(e.message); } };
+$("#signin").addEventListener("click", () => doLogin("auto"));
+$("#signin-alt").addEventListener("click", () => doLogin(altMethod()));
+function setupGate() {
+  const alt = altMethod();
+  $("#signin-alt").hidden = !alt;
+  $("#signin-alt").textContent = alt === "popup" ? "Outra forma de entrar (janela do Google)" : "Outra forma de entrar (sem janela)";
+  const note = $("#gate-note");
+  if (K.prefersDirectLogin() && !K.directLoginAvailable()) { note.textContent = "Aviso: o login no app instalado do iPhone ainda não foi configurado neste site (googleWebClientId). Se não entrar, use o site pelo Safari. [código: google/no-client-id]"; note.hidden = false; }
+}
 
 K.onStatus((s) => {
   const el = $("#syncline"); if (!el) return;
@@ -565,9 +579,14 @@ K.onStatus((s) => {
 });
 
 let started = false;
-K.initCloud(async (u, state) => {
+K.initCloud(async (u, state, err) => {
   $("#boot").hidden = true;
-  if (!u) { $("#app").hidden = true; $("#gate").hidden = false; if (state === "not_configured") { $("#setup-banner").hidden = false; $("#signin").disabled = true; } return; }
+  if (!u) {
+    $("#app").hidden = true; $("#gate").hidden = false;
+    if (state === "not_configured") { $("#setup-banner").hidden = false; $("#signin").disabled = true; return; }
+    setupGate(); if (err) gateErr(err);
+    return;
+  }
   $("#gate").hidden = true;
   if (started) return; started = true;
   try { await K.pull(); } catch (e) { toast("Não foi possível ler a sincronização. As regras novas do Firestore já foram publicadas?"); K.S.profiles.length || K.S.profiles.push({ id: "local", name: "Principal", color: 0, kid: false, pinHash: "", pinSalt: "" }); }
@@ -583,7 +602,16 @@ K.initCloud(async (u, state) => {
 });
 
 // ---------------------------------------------------------------- app instalável (PWA)
-if ("serviceWorker" in navigator) addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));
+// Atualização automática: ao abrir, ao voltar para o app e a cada 30 min o app procura versão nova e se recarrega sozinho.
+if ("serviceWorker" in navigator) {
+  const hadController = !!navigator.serviceWorker.controller; let reloading = false;
+  navigator.serviceWorker.addEventListener("controllerchange", () => { if (hadController && !reloading) { reloading = true; location.reload(); } });
+  addEventListener("load", () => navigator.serviceWorker.register("sw.js", { updateViaCache: "none" }).then((reg) => {
+    const check = () => reg.update().catch(() => {});
+    document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") check(); });
+    setInterval(check, 30 * 60 * 1000);
+  }).catch(() => {}));
+}
 let installEvt = null;
 addEventListener("beforeinstallprompt", (e) => { e.preventDefault(); installEvt = e; if (G.view === "settings" && SET.tab === "account") render(); });
 const isStandalone = () => matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
