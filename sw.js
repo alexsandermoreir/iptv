@@ -1,6 +1,6 @@
 // Service worker: guarda só a "casca" do site (HTML, CSS, JS) para abrir mais rápido e funcionar como app instalado.
 // Nunca guarda vídeo, listas, imagens do provedor nem respostas do Firebase/Worker (nada de credenciais no cache).
-const CACHE = "iptv-shell-v4";
+const CACHE = "iptv-shell-v5";
 const SHELL = ["./", "index.html", "styles.css", "app.js", "catalog.js", "cloud.js", "google-login.js", "pair-connect.js", "firebase-config.js", "manifest.webmanifest", "icon-192.png", "icon-512.png"];
 
 self.addEventListener("install", (e) => { e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()).catch(() => {})); });

@@ -343,6 +343,11 @@ async function playLive(sc, idx = 0, mode = "hls", keep = false) {
   const note = (m) => { P.why.push(`v${idx + 1}/${mode}: ${m}`); console.warn("[iptv]", P.why.at(-1)); };
   const v = sc.variants[idx], src = G.byId[v.sid];
   openPlayer(sc.name, `${v.group}`);
+  // aparelhos sem a tecnologia de vídeo do navegador (MSE): iPhone com iOS anterior ao 17.1
+  const canHls = !!(window.Hls && Hls.isSupported()), canTs = !!(window.mpegts && mpegts.isSupported());
+  if (!canHls && !canTs) { pmsg("Este aparelho não consegue tocar canais ao vivo no navegador (no iPhone, isso exige iOS 17.1 ou mais novo). Use a TV, ou atualize o iOS."); return; }
+  // se o navegador só tem o modo nativo de HLS, mas o provedor entrega vídeo bruto (TS), vai direto para o modo TS
+  if (mode === "hls" && !canHls && canTs && src?.kind === "xtream" && !v.url) return playLive(sc, idx, "ts", keep);
   const sel = $("#p-var"); sel.hidden = sc.variants.length < 2;
   sel.replaceChildren(...sc.variants.map((x, i) => h("option", { value: i, selected: i === idx }, C.variantLabel(x) + (i ? ` · alt ${i}` : ""))));
   sel.onchange = () => playLive(sc, Number(sel.value), "hls");
